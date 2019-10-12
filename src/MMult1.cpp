@@ -6,17 +6,12 @@ void MMult1(float* A, float* B, float* C, int m, int n, int k) {
 	//A: m*k; B: k*n; C: m*n
 	//列乘行, 得到k个矩阵。 K个矩阵相加得到C
 
-	for (int i = 0; i < m; i += 4) {
-		for (int j = 0; j < n; ++j) {
-			C[i*n + j] = 0.f;
-			C[(i + 1)*n + j] = 0.f;
-			C[(i + 2)*n + j] = 0.f;
-			C[(i + 3)*n + j] = 0.f;
-
+	for (int i = 0; i < m; ++i) {
+		for (int j = 0; j < n; j += 4) {
 			AddDot(k, &A[i*k], &B[j], n, &C[i*n + j]);
-			AddDot(k, &A[(i+1)*k], &B[j], n, &C[(i+1)*n + j]);
-			AddDot(k, &A[(i+2)*k], &B[j], n, &C[(i+2)*n + j]);
-			AddDot(k, &A[(i+3)*k], &B[j], n, &C[(i+3)*n + j]);
+			AddDot(k, &A[i*k], &B[j+1], n, &C[i*n + j + 1]);
+			AddDot(k, &A[i*k], &B[j+2], n, &C[i*n + j + 2]);
+			AddDot(k, &A[i*k], &B[j+3], n, &C[i*n + j + 3]);
 		}
 	}
 }

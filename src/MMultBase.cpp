@@ -7,7 +7,6 @@ void MMultBase(float* A, float* B, float* C, int m, int n, int k) {
 	//普通做法, 行乘列
 	for (int i = 0; i < m; ++i) {
 		for (int j = 0; j < n; ++j) {
-			C[i*n + j] = 0.f;
 			AddDot(k, &A[i*k], &B[j], n, &C[i*n + j]);
 		}
 	}
