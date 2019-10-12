@@ -143,6 +143,7 @@
     <ClCompile Include="..\..\src\MMult1.cpp" />
     <ClCompile Include="..\..\src\MMultBase.cpp" />
     <ClCompile Include="..\..\src\MMult_1x4_5.cpp" />
+    <ClCompile Include="..\..\src\MMult_1x4_6.cpp" />
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\timer.h" />
