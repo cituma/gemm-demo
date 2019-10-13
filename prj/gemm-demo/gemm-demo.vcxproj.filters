@@ -24,10 +24,10 @@
     <ClCompile Include="..\..\src\MMult1.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\MMult_1x4_5.cpp">
+    <ClCompile Include="..\..\src\MMult_4x1_5.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
-    <ClCompile Include="..\..\src\MMult_1x4_6.cpp">
+    <ClCompile Include="..\..\src\MMult_4x1_6.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
   </ItemGroup>

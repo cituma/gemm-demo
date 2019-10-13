@@ -37,8 +37,8 @@ static void check_result(std::vector<float>& l, std::vector<float>& r) {
 
 extern void MMultBase(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult1(float* A, float* B, float* C, int m, int n, int k);
-extern void MMult_1x4_5(float* A, float* B, float* C, int m, int n, int k);
-extern void MMult_1x4_6(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x1_5(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x1_6(float* A, float* B, float* C, int m, int n, int k);
 
 int main(int argc, char* argv[]) {
 	int size = 600;
@@ -69,7 +69,7 @@ int main(int argc, char* argv[]) {
 #endif
 	tmp_cmp = C;
 
-#if 0
+#if 1
 	// 相比Base没有性能提升
 	clear_vector(C);
 	// matrix multipl pack test
@@ -85,7 +85,7 @@ int main(int argc, char* argv[]) {
 	clear_vector(C);
 	// matrix multipl pack test
 	clk.Start();
-	MMult_1x4_5(&A[0], &B[0], &C[0], m, n, k);
+	MMult_4x1_5(&A[0], &B[0], &C[0], m, n, k);
 	clk.Stop();
 	cal_time = clk.GetTime() / 1000000; //s
 	std::cout << "MMult_1x4_5 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
@@ -96,7 +96,7 @@ int main(int argc, char* argv[]) {
 	clear_vector(C);
 	// matrix multipl pack test
 	clk.Start();
-	MMult_1x4_6(&A[0], &B[0], &C[0], m, n, k);
+	MMult_4x1_6(&A[0], &B[0], &C[0], m, n, k);
 	clk.Stop();
 	cal_time = clk.GetTime() / 1000000; //s
 	std::cout << "MMult_1x4_6 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
