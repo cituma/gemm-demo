@@ -41,9 +41,16 @@ extern void MMult_4x1_5(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult_4x1_6(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult_4x1_7(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult_4x1_8(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x4_5(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x4_6(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x4_7(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x4_8(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x4_9(float* A, float* B, float* C, int m, int n, int k);
+//从这里开始会用到汇编
+extern void MMult_4x4_10(float* A, float* B, float* C, int m, int n, int k);
 
 int main(int argc, char* argv[]) {
-	int size = 1000;
+	int size = 600;
 	size = (size / 4) * 4;
 	int m = size;
 	int n = size;
@@ -71,7 +78,7 @@ int main(int argc, char* argv[]) {
 #endif
 	tmp_cmp = C;
 
-#if 1
+#if 0
 	// 相比Base没有性能提升
 	clear_vector(C);
 	// matrix multipl pack test
@@ -82,7 +89,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "MMult1 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
-#if 1
+#if 0
 	// 速度有提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
 	clear_vector(C);
 	// matrix multipl pack test
@@ -93,7 +100,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "MMult_1x4_5 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
-#if 1
+#if 0
 	// 速度有提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
 	clear_vector(C);
 	// matrix multipl pack test
@@ -104,7 +111,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "MMult_1x4_6 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
-#if 1
+#if 0
 	// 速度有提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
 	clear_vector(C);
 	// matrix multipl pack test
@@ -116,7 +123,7 @@ int main(int argc, char* argv[]) {
 #endif
 
 
-#if 1
+#if 0
 	// 速度有提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
 	clear_vector(C);
 	// matrix multipl pack test
@@ -124,8 +131,75 @@ int main(int argc, char* argv[]) {
 	MMult_4x1_8(&A[0], &B[0], &C[0], m, n, k);
 	clk.Stop();
 	cal_time = clk.GetTime() / 1000000; //s
-	std::cout << "MMult_1x4_8 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+	std::cout << "MMult_4x1_8 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
+
+#if 0
+	// 速度有提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_5(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_5 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 0
+	// 速度有提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_6(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_6 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 0
+	// 速度有提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_7(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_7 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 0
+	// 速度未提升, 原因 https://github.com/flame/how-to-optimize-gemm/wiki/Optimization_1x4_5
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_8(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_8 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 1
+	// 速度未提升, 4x4中一次计算2列
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_9(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_9 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 1
+	// 速度
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_10(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_10 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
 	check_result(tmp_cmp, C);
 
 	return 0;
