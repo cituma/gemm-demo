@@ -22,31 +22,22 @@ void MMult_4x4_10(float* A, float* B, float* C, int m, int n, int k) {
 	}
 }
 
+#include <emmintrin.h>  // SSE3
+#include <intrin.h>		//所有sse版本
+
+typedef union {
+	__m128	v;		//__m128单精度浮点, __m128i整型, __m128d双精度
+	float	f[4];
+} v2f_t;
+
 static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int wc)
 {
-	register float
-		/* hold contributions to
-		   C( 0, 0 ), C( 0, 1 ), C( 0, 2 ), C( 0, 3 )
-		   C( 1, 0 ), C( 1, 1 ), C( 1, 2 ), C( 1, 3 )
-		   C( 2, 0 ), C( 2, 1 ), C( 2, 2 ), C( 2, 3 )
-		   C( 3, 0 ), C( 3, 1 ), C( 3, 2 ), C( 3, 3 )   */
-		c_00_reg = 0.f, c_01_reg = 0.f, c_02_reg = 0.f, c_03_reg = 0.f,
-		c_10_reg = 0.f, c_11_reg = 0.f, c_12_reg = 0.f, c_13_reg = 0.f,
-		c_20_reg = 0.f, c_21_reg = 0.f, c_22_reg = 0.f, c_23_reg = 0.f,
-		c_30_reg = 0.f, c_31_reg = 0.f, c_32_reg = 0.f, c_33_reg = 0.f,
-		/* hold
-		   A( 0, p )
-		   A( 1, p )
-		   A( 2, p )
-		   A( 3, p ) */
-		b_0p_reg,
-		b_1p_reg,
-		b_2p_reg,
-		b_3p_reg,
-		a_0p_reg,
-		a_1p_reg,
-		a_2p_reg,
-		a_3p_reg;
+	v2f_t
+		c_00_01_02_03_vreg, c_10_11_12_13_vreg,
+		c_20_21_22_23_vreg, c_30_31_32_33_vreg,
+		b_p0_p1_p2_p3_vreg,
+		a_0p_reg, a_1p_reg, a_2p_reg, a_3p_reg;
+
 	float
 		*a_p0_pntr, *a_p1_pntr, *a_p2_pntr, *a_p3_pntr;
 
@@ -54,47 +45,28 @@ static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int w
 	a_p1_pntr = &A(1, 0);
 	a_p2_pntr = &A(2, 0);
 	a_p3_pntr = &A(3, 0);
+
+	c_00_01_02_03_vreg.v = _mm_setzero_ps();
+	c_10_11_12_13_vreg.v = _mm_setzero_ps();
+	c_20_21_22_23_vreg.v = _mm_setzero_ps();
+	c_30_31_32_33_vreg.v = _mm_setzero_ps();
+
 	for (int p = 0; p < k; ++p) {
-		b_0p_reg = B(p, 0);
-		b_1p_reg = B(p, 1);
-		b_2p_reg = B(p, 2);
-		b_3p_reg = B(p, 3);
+		b_p0_p1_p2_p3_vreg.v = _mm_load_ps((float*)&B(p, 0));	//读内存中的内容到vector中
 
-		a_0p_reg = *a_p0_pntr++;
-		a_1p_reg = *a_p1_pntr++;
-		a_2p_reg = *a_p2_pntr++;
-		a_3p_reg = *a_p3_pntr++;
+		a_0p_reg.v = _mm_load1_ps(a_p0_pntr++);
+		a_1p_reg.v = _mm_load1_ps(a_p1_pntr++);
+		a_2p_reg.v = _mm_load1_ps(a_p2_pntr++);
+		a_3p_reg.v = _mm_load1_ps(a_p3_pntr++);
 
-		//第0,1列
-		c_00_reg += a_0p_reg * b_0p_reg;
-		c_01_reg += a_0p_reg * b_1p_reg;
-
-		c_10_reg += a_1p_reg * b_0p_reg;
-		c_11_reg += a_1p_reg * b_1p_reg;
-
-		c_20_reg += a_2p_reg * b_0p_reg;
-		c_21_reg += a_2p_reg * b_1p_reg;
-
-		c_30_reg += a_3p_reg * b_0p_reg;
-		c_31_reg += a_3p_reg * b_1p_reg;
-		
-
-		//第2, 3列
-		c_02_reg += a_0p_reg * b_2p_reg;
-		c_03_reg += a_0p_reg * b_3p_reg;
-
-		c_12_reg += a_1p_reg * b_2p_reg;
-		c_13_reg += a_1p_reg * b_3p_reg;
-
-		c_22_reg += a_2p_reg * b_2p_reg;
-		c_23_reg += a_2p_reg * b_3p_reg;
-
-		c_32_reg += a_3p_reg * b_2p_reg;
-		c_33_reg += a_3p_reg * b_3p_reg;
+		c_00_01_02_03_vreg.v = _mm_add_ps(c_00_01_02_03_vreg.v, _mm_mul_ps(a_0p_reg.v, b_p0_p1_p2_p3_vreg.v));
+		c_10_11_12_13_vreg.v = _mm_add_ps(c_10_11_12_13_vreg.v, _mm_mul_ps(a_1p_reg.v, b_p0_p1_p2_p3_vreg.v));
+		c_20_21_22_23_vreg.v = _mm_add_ps(c_20_21_22_23_vreg.v, _mm_mul_ps(a_2p_reg.v, b_p0_p1_p2_p3_vreg.v));
+		c_30_31_32_33_vreg.v = _mm_add_ps(c_30_31_32_33_vreg.v, _mm_mul_ps(a_3p_reg.v, b_p0_p1_p2_p3_vreg.v));
 	}
 
-	C(0, 0) += c_00_reg;   C(0, 1) += c_01_reg;   C(0, 2) += c_02_reg;   C(0, 3) += c_03_reg;
-	C(1, 0) += c_10_reg;   C(1, 1) += c_11_reg;   C(1, 2) += c_12_reg;   C(1, 3) += c_13_reg;
-	C(2, 0) += c_20_reg;   C(2, 1) += c_21_reg;   C(2, 2) += c_22_reg;   C(2, 3) += c_23_reg;
-	C(3, 0) += c_30_reg;   C(3, 1) += c_31_reg;   C(3, 2) += c_32_reg;   C(3, 3) += c_33_reg;
+	C(0, 0) += c_00_01_02_03_vreg.f[0];   C(0, 1) += c_00_01_02_03_vreg.f[1];   C(0, 2) += c_00_01_02_03_vreg.f[2];   C(0, 3) += c_00_01_02_03_vreg.f[3];
+	C(1, 0) += c_10_11_12_13_vreg.f[0];   C(1, 1) += c_10_11_12_13_vreg.f[1];   C(1, 2) += c_10_11_12_13_vreg.f[2];   C(1, 3) += c_10_11_12_13_vreg.f[3];
+	C(2, 0) += c_20_21_22_23_vreg.f[0];   C(2, 1) += c_20_21_22_23_vreg.f[1];   C(2, 2) += c_20_21_22_23_vreg.f[2];   C(2, 3) += c_20_21_22_23_vreg.f[3];
+	C(3, 0) += c_30_31_32_33_vreg.f[0];   C(3, 1) += c_30_31_32_33_vreg.f[1];   C(3, 2) += c_30_31_32_33_vreg.f[2];   C(3, 3) += c_30_31_32_33_vreg.f[3];
 }
