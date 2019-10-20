@@ -35,7 +35,8 @@ static void check_result(std::vector<float>& l, std::vector<float>& r) {
 
 // https://github.com/flame/how-to-optimize-gemm
 // 上述github中是列主序, 这里改为行主序。
-// 参考 https://github.com/tpoisonooo/how-to-optimize-gemm
+// 参考 https://zhuanlan.zhihu.com/p/65436463
+// 对应git https://github.com/tpoisonooo/how-to-optimize-gemm
 
 extern void MMultBase(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult1(float* A, float* B, float* C, int m, int n, int k);
@@ -51,6 +52,7 @@ extern void MMult_4x4_9(float* A, float* B, float* C, int m, int n, int k);
 //从这里开始会用到汇编
 extern void MMult_4x4_10(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult_4x4_11(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x4_12(float* A, float* B, float* C, int m, int n, int k);
 
 int main(int argc, char* argv[]) {
 	int size = 600;
@@ -212,6 +214,17 @@ int main(int argc, char* argv[]) {
 	clk.Stop();
 	cal_time = clk.GetTime() / 1000000; //s
 	std::cout << "MMult_4x4_11 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 1
+	// 速度
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_12(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_12 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
 	check_result(tmp_cmp, C);

@@ -57,6 +57,9 @@
     <ClCompile Include="..\..\src\MMult_4x4_11.cpp">
       <Filter>源文件</Filter>
     </ClCompile>
+    <ClCompile Include="..\..\src\MMult_4x4_12.cpp">
+      <Filter>源文件</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="..\..\src\timer.h">

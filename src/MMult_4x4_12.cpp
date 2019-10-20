@@ -1,4 +1,5 @@
 #include <iostream>
+#include <vector>
 
 #define A(i,j) a[ (i)*wa + (j) ]
 #define B(i,j) b[ (i)*wb + (j) ]
@@ -11,11 +12,11 @@
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
 static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int wc);
-static void InnerKernel(int m, int n, int k, float* A, int lda,
-	float* B, int ldb,
-	float* C, int ldc);
+static void InnerKernel(int m, int n, int k, float* a, int lda,
+	float* b, int ldb,
+	float* c, int ldc);
 
-void MMult_4x4_11(float* A, float* B, float* C, int m, int n, int k) {
+void MMult_4x4_12(float* A, float* B, float* C, int m, int n, int k) {
 	//A: m*k; B: k*n; C: m*n
 	//列乘行, 得到k个矩阵。 K个矩阵相加得到C
 
@@ -39,15 +40,55 @@ void MMult_4x4_11(float* A, float* B, float* C, int m, int n, int k) {
 	}
 }
 
+//让4xk的A矩阵按列内存连续. 因为 AddDot4x4 每次把列保存到sse vec中. 
+static void PackMatrixA(int k, float *a, int wa, float *a_to)
+{
+	float
+		*a_0i_pntr = a,
+		*a_1i_pntr = a + wa,
+		*a_2i_pntr = a + (wa << 1),
+		*a_3i_pntr = a + (3 * wa);
+
+	for (int i = 0; i < k; ++i) {
+		*a_to++ = *a_0i_pntr++;
+		*a_to++ = *a_1i_pntr++;
+		*a_to++ = *a_2i_pntr++;
+		*a_to++ = *a_3i_pntr++;
+	}
+}
+
+//让kx4的B矩阵按行内存连续.因为 AddDot4x4 
+static void PackMatrixB(int k, float *b, int wb, float *b_to)
+{
+	for (int j = 0; j < k; j++) {  /* loop over columns of A */
+		float* b_ij_pntr = &B(j, 0);
+
+		*b_to++ = *b_ij_pntr;
+		*b_to++ = *(b_ij_pntr + 1);
+		*b_to++ = *(b_ij_pntr + 2);
+		*b_to++ = *(b_ij_pntr + 3);
+	}
+}
+
 static void InnerKernel(int m, int n, int k, float* a, int wa,
 	float* b, int wb,
 	float* c, int wc) {
 	//A: m*k; B: k*n; C: m*n
 	//列乘行, 得到k个矩阵。 K个矩阵相加得到C
 
-	for (int i = 0; i < m; i+=4) {
-		for (int j = 0; j < n; j+=4) {
-			AddDot4x4(k, &A(i, 0), wa, &B(0, j), wb, &C(i, j), wc);
+	std::vector<float> packedA(m * k);
+	std::vector<float> packedB(k * n);
+
+	for (int j = 0; j < n; j += 4) {
+		//pcakedB为(n/4) * (k * 4) 的矩阵
+		PackMatrixB(k, &B(0, j), wb, &packedB[j*k]);
+		for (int i = 0; i < m; i += 4) {
+			if (j == 0) {
+				PackMatrixA(k, &A(i, 0), wa, &packedA[i*k]);
+			}
+			//AddDot4x4(k, &A(i, 0), wa, &B(0, j), wb, &C(i, j), wc);
+			//4行 与 4列 相乘, 得到C[4x4]矩阵
+			AddDot4x4(k, &packedA[i*k], k, &packedB[j * k], wb, &C(i, j), wc);
 		}
 	}
 }
@@ -65,7 +106,7 @@ typedef union {
 /*
 	4xk矩阵A和一个kx4矩阵B相乘, 得到4x4的结果C。
 	使用K个循环, 每次循环时，将A的列放到sse vec中, 将B的行放到sse vec中。两个vec相乘，一次性得到C的一行。
-	其中，B的行内存不连续，因为是从大矩阵中截取的。
+	其中，经过pack操作, B的行内存连续. 所以B每个循环地址加4就行。 
 */
 static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int wc)
 {
@@ -75,26 +116,20 @@ static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int w
 		b_p0_p1_p2_p3_vreg,
 		a_0p_reg, a_1p_reg, a_2p_reg, a_3p_reg;
 
-	float
-		*a_p0_pntr, *a_p1_pntr, *a_p2_pntr, *a_p3_pntr;
-
-	a_p0_pntr = &A(0, 0);
-	a_p1_pntr = &A(1, 0);
-	a_p2_pntr = &A(2, 0);
-	a_p3_pntr = &A(3, 0);
-
 	c_00_01_02_03_vreg.v = _mm_setzero_ps();
 	c_10_11_12_13_vreg.v = _mm_setzero_ps();
 	c_20_21_22_23_vreg.v = _mm_setzero_ps();
 	c_30_31_32_33_vreg.v = _mm_setzero_ps();
 
 	for (int p = 0; p < k; ++p) {
-		b_p0_p1_p2_p3_vreg.v = _mm_load_ps((float*)&B(p, 0));	//读内存中的内容到vector中
+		//b_p0_p1_p2_p3_vreg.v = _mm_load_ps((float*)&B(p, 0));	//读内存中的内容到vector中
+		b_p0_p1_p2_p3_vreg.v = _mm_load_ps(b);
+		b += 4;
 
-		a_0p_reg.v = _mm_load1_ps(a_p0_pntr++);		//取*a_p0_pntr, 拷贝四次
-		a_1p_reg.v = _mm_load1_ps(a_p1_pntr++);
-		a_2p_reg.v = _mm_load1_ps(a_p2_pntr++);
-		a_3p_reg.v = _mm_load1_ps(a_p3_pntr++);
+		a_0p_reg.v = _mm_load1_ps(a++);		//取*a, 拷贝四次
+		a_1p_reg.v = _mm_load1_ps(a++);
+		a_2p_reg.v = _mm_load1_ps(a++);
+		a_3p_reg.v = _mm_load1_ps(a++);
 
 		c_00_01_02_03_vreg.v = _mm_add_ps(c_00_01_02_03_vreg.v, _mm_mul_ps(a_0p_reg.v, b_p0_p1_p2_p3_vreg.v));
 		c_10_11_12_13_vreg.v = _mm_add_ps(c_10_11_12_13_vreg.v, _mm_mul_ps(a_1p_reg.v, b_p0_p1_p2_p3_vreg.v));
