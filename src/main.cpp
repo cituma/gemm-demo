@@ -12,7 +12,7 @@ static void random_vector(std::vector<float>& matrix) {
 		unsigned int seed = static_cast<unsigned int>(i + start);
 		static std::default_random_engine e(seed);
 		static std::uniform_real_distribution<double> u(min, max);
-		matrix[i] = static_cast<float>(u(e));
+		matrix[i] = static_cast<float>(static_cast<int>(u(e)));
 	}
 }
 
@@ -25,8 +25,10 @@ static void clear_vector(std::vector<float>& v, float num = 0.f) {
 static void check_result(std::vector<float>& l, std::vector<float>& r) {
 	for (int i = 0; i < l.size(); ++i) {
 		if (l[i] != r[i]) {
-			std::cout << "compare error in idx:" << i << std::endl;
-			return;
+			std::cout << "compare error in idx:" << i << "." << l[i] << ":" << r[i] << std::endl;
+			if (i > 100) {
+				return;
+			}
 		}
 	}
 }
@@ -48,6 +50,7 @@ extern void MMult_4x4_8(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult_4x4_9(float* A, float* B, float* C, int m, int n, int k);
 //从这里开始会用到汇编
 extern void MMult_4x4_10(float* A, float* B, float* C, int m, int n, int k);
+extern void MMult_4x4_11(float* A, float* B, float* C, int m, int n, int k);
 
 int main(int argc, char* argv[]) {
 	int size = 600;
@@ -178,7 +181,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "MMult_4x4_8 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
-#if 1
+#if 0
 	// 速度未提升, 4x4中一次计算2列
 	clear_vector(C);
 	// matrix multipl pack test
@@ -198,6 +201,17 @@ int main(int argc, char* argv[]) {
 	clk.Stop();
 	cal_time = clk.GetTime() / 1000000; //s
 	std::cout << "MMult_4x4_10 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 1
+	// 速度
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_11(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_11 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
 	check_result(tmp_cmp, C);

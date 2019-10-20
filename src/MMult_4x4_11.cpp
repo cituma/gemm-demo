@@ -4,15 +4,50 @@
 #define B(i,j) b[ (i)*wb + (j) ]
 #define C(i,j) c[ (i)*wc + (j) ]
 
-static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int wc);
+/* Block sizes */
+#define nc 256
+#define kc 128
 
-void MMult_4x4_10(float* A, float* B, float* C, int m, int n, int k) {
+#define min( i, j ) ( (i)<(j) ? (i): (j) )
+
+static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int wc);
+static void InnerKernel(int m, int n, int k, float* A, int lda,
+	float* B, int ldb,
+	float* C, int ldc);
+
+void MMult_4x4_11(float* A, float* B, float* C, int m, int n, int k) {
+	//A: m*k; B: k*n; C: m*n
+	//列乘行, 得到k个矩阵。 K个矩阵相加得到C
+
+	//nc: 256
+	//kc: 128
+	//GEPB: 行主序下性能最优
+	for (int p = 0; p < k; p += kc) {		//Panel
+		int pa = min(k - p, kc);		//A按列分为panel, B按行分为panel
+		for (int j = 0; j < n; j += nc) {	//Block
+			int ja = min(m-j, nc);		//B的panel按列分为block
+			//得到一个m*ja(最大为nc)的矩阵, 加法次数为pa(最大为kc)
+			//panel*block
+			//p为不同值对C的地址没有影响, 在p轴累加
+			//A和B全部可以放到L2 cache中, 性能会有提升。
+			InnerKernel(m, ja, pa, 
+				&A[p], k,
+				&B[p*n+j], n,
+				&C[j], n
+				);
+		}
+	}
+}
+
+static void InnerKernel(int m, int n, int k, float* A, int wa,
+	float* B, int wb,
+	float* C, int wc) {
 	//A: m*k; B: k*n; C: m*n
 	//列乘行, 得到k个矩阵。 K个矩阵相加得到C
 
 	for (int i = 0; i < m; i+=4) {
 		for (int j = 0; j < n; j+=4) {
-			AddDot4x4(k, &A[i*k], k, &B[j], n, &C[i*n + j], n);
+			AddDot4x4(k, &A[i*wa], wa, &B[j], wb, &C[i*wc + j], wc);
 		}
 	}
 }
