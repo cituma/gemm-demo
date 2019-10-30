@@ -149,6 +149,7 @@
     <ClCompile Include="..\..\src\MMult_4x4_10.cpp" />
     <ClCompile Include="..\..\src\MMult_4x4_11.cpp" />
     <ClCompile Include="..\..\src\MMult_4x4_12.cpp" />
+    <ClCompile Include="..\..\src\MMult_4x4_13.cpp" />
     <ClCompile Include="..\..\src\MMult_4x4_5.cpp" />
     <ClCompile Include="..\..\src\MMult_4x4_6.cpp" />
     <ClCompile Include="..\..\src\MMult_4x4_7.cpp" />
