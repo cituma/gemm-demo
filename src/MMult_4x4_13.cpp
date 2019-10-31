@@ -6,10 +6,6 @@
 #define B(i,j) b[ (i)*wb + (j) ]
 #define C(i,j) c[ (i)*wc + (j) ]
 
-/* Block sizes */
-#define nc 128
-#define kc 128
-
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
 #define GEMM_N (240)  // GEMM_R
@@ -18,10 +14,15 @@
 #define GEMM_UNROLL (4)
 #define KERNEL_4x4  kernel_4x4_v2
 
-static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int wc);
-static void InnerKernel(int m, int n, int k, float* a, int lda,
-	float* b, int ldb,
-	float* c, int ldc);
+#include <mmintrin.h>
+#include <xmmintrin.h>  // SSE
+#include <pmmintrin.h>  // SSE2
+#include <emmintrin.h>  // SSE3
+
+typedef union {
+	__m128	v;		//__m128单精度浮点, __m128i整型, __m128d双精度
+	float	f[4];
+} v4f_t;
 
 static void kernel_4x4_v2(int m, int n, int k,
 	float* sa, float * sb, float* sc, int ldc);
@@ -40,6 +41,14 @@ float* fastMalloc(int size) {
 #endif
 }
 
+void fastFree(void* ptr) {
+#ifdef _WIN32
+	_aligned_free(ptr);
+#else
+	free(ptr);
+#endif
+}
+
 void MMult_4x4_13(float* A, float* B, float* C, int m, int n, int k) {
 	int lda = k;
 	int ldb = n;
@@ -52,6 +61,7 @@ void MMult_4x4_13(float* A, float* B, float* C, int m, int n, int k) {
 
 	for (int ms = 0; ms < m; ms += GEMM_M) {
 		int min_m = m - ms;
+		//min_m 在4到GEMM_M间, 除了最后一个循环，其他值都为GEMM_M
 		if (min_m > GEMM_M) {
 			min_m = GEMM_M;
 		}
@@ -59,15 +69,18 @@ void MMult_4x4_13(float* A, float* B, float* C, int m, int n, int k) {
 		int min_k = 1;
 		for (int ks = 0; ks < k; ks += min_k) {
 			min_k = k - ks;
+			//min_k 在4到GEMM_K之间, 除了最后一个循环，其他值都为GEMM_K
 			if (min_k >= (GEMM_K << 1)) {
 				min_k = GEMM_K;
 			}
 			else if (min_k > GEMM_K) {
-				min_k = (min_k / 2 + GEMM_UNROLL - 1) & ~(GEMM_UNROLL - 1);
+				//min_k = (((min_k / 2) + 3) / 4) * 4;
+				min_k = (min_k / 2 + GEMM_UNROLL - 1) & ~(GEMM_UNROLL - 1);	//(min_k / 2)向上与GEMM_UNROLL对齐
 			}
 
 			//首先 packB
 			int min_n = n;
+			//min_n 在4到GEMM_N之间
 			if (n >= GEMM_N * 2) {
 				min_n = GEMM_N;
 			}
@@ -76,8 +89,46 @@ void MMult_4x4_13(float* A, float* B, float* C, int m, int n, int k) {
 			}
 			packB_4(min_k, min_n, B + ks * ldb, ldb, sb);
 
+			// micro kernel, split A Block to smaller Panel
+			int min_mm = 0;
+			for (int mms = ms; mms < ms + min_m; mms += min_mm) {
+				min_mm = (ms + min_m) - mms;
+				if (min_mm >= 3 * GEMM_UNROLL) {
+					min_mm = 3 * GEMM_UNROLL;
+				}
+				else if (min_mm >= 2 * GEMM_UNROLL) {
+					min_mm = 2 * GEMM_UNROLL;
+				}
+				else if (min_mm > GEMM_UNROLL) {
+					min_mm = GEMM_UNROLL;
+				}
+
+				// coninueous packA
+				float* sa_addr = sa + min_k * (mms - ms);
+				packA_4(min_mm, min_k, A + mms * lda + ks, lda, sa_addr);
+
+				//min_mm * min_k 与 min_k * min_n 矩阵乘, 得到min_mm * min_n的矩阵
+				KERNEL_4x4(min_mm, min_n, min_k, sa_addr, sb, C + mms * ldc, ldc);
+			}
+
+
+			// the first B Block has been packed, proc the others
+			for (int ns = min_n; ns < n; ns += min_n) {
+				min_n = n - ns;
+				if (min_n >= GEMM_N * 2) {
+					min_n = GEMM_N;
+				}
+				else if (min_n > GEMM_N) {
+					min_n = (min_n / 2 + GEMM_UNROLL - 1) & ~(GEMM_UNROLL - 1);
+				}
+
+				packB_4(min_k, min_n, B + ns + ldb * ks, ldb, sb);
+				KERNEL_4x4(min_m, min_n, min_k, sa, sb, C + ms * ldc + ns, ldc);
+			}
 		}
 	}
+	fastFree(sa);
+	fastFree(sb);
 }
 
 
@@ -111,6 +162,121 @@ C7 C8 C9
  */
 static void kernel_4x4_v2(int m, int n, int k,
 	float* sa, float * sb, float* sc, int ldc) {
+	//assert(m > 0 && n > 0 && k > 0);
+	//assert(m % 4 == 0 && n % 4 == 0 && k % 4 == 0);
+
+	float* a = sa;
+	float* b = sb;
+	float* c = sc;
+
+	v4f_t
+		v0, v1, v2, v3,
+		v16_0, v16_1, v16_2, v16_3,
+		v17_0, v17_1, v17_2, v17_3,
+		v18_0, v18_1, v18_2, v18_3,
+		v19_0, v19_1, v19_2, v19_3,
+		v24, v25, v26, v27;
+	for (int i = 0; i < m; i += 4) {
+		//a按每4行分panel
+		for (int j = 0; j < n; j += 4) {
+			//b按每4列分panel
+
+			v24.v = _mm_setzero_ps();
+			v25.v = _mm_setzero_ps();
+			v26.v = _mm_setzero_ps();
+			v27.v = _mm_setzero_ps();
+			//4xk 和 kx4 两个矩阵相乘
+			for (int l = 0; l < k; l += 4) {
+				/*
+				A, B矩阵已按pack_A和pack_B的方式重排.
+				A(pack前):
+				0 1 2 3  4 5 6 7 ...
+				0 1 2 3  4 5 6 7 ...
+				0 1 2 3  4 5 6 7 ...
+				0 1 2 3  4 5 6 7 ...
+
+				B(pack前):
+				0 1 2 3
+				0 1 2 3
+				0 1 2 3
+				0 1 2 3
+				8 9 a b
+				8 9 a b
+				8 9 a b
+				8 9 a b
+				...
+
+				用A的l列乘B的l行, (l+1)列乘(l+1)行,(l+2)列乘(l+2)行,(l+3)列乘(l+3)行 
+				得到4个4x4矩阵并累加.
+				最后把k/4个4x4矩阵累加.
+				*/
+
+				//第1列乘第1行
+				//v24,v25,v26,v27组成一个4x4的矩阵
+				v0.v = _mm_load_ps(b);
+				v16_0.v = _mm_load1_ps(a++);		//取*a, 拷贝四次
+				v16_1.v = _mm_load1_ps(a++);
+				v16_2.v = _mm_load1_ps(a++);
+				v16_3.v = _mm_load1_ps(a++);
+				v24.v = _mm_add_ps(v24.v, _mm_mul_ps(v0.v, v16_0.v));
+				v25.v = _mm_add_ps(v25.v, _mm_mul_ps(v0.v, v16_1.v));
+				v26.v = _mm_add_ps(v26.v, _mm_mul_ps(v0.v, v16_2.v));
+				v27.v = _mm_add_ps(v27.v, _mm_mul_ps(v0.v, v16_3.v));
+
+				//第2列乘第2行
+				v1.v = _mm_load_ps(b + 4);
+				v17_0.v = _mm_load1_ps(a++);
+				v17_1.v = _mm_load1_ps(a++);
+				v17_2.v = _mm_load1_ps(a++);
+				v17_3.v = _mm_load1_ps(a++);
+				v24.v = _mm_add_ps(v24.v, _mm_mul_ps(v1.v, v17_0.v));
+				v25.v = _mm_add_ps(v25.v, _mm_mul_ps(v1.v, v17_1.v));
+				v26.v = _mm_add_ps(v26.v, _mm_mul_ps(v1.v, v17_2.v));
+				v27.v = _mm_add_ps(v27.v, _mm_mul_ps(v1.v, v17_3.v));
+
+				//第3列乘第3行
+				v2.v = _mm_load_ps(b + 8);
+				v18_0.v = _mm_load1_ps(a++);
+				v18_1.v = _mm_load1_ps(a++);
+				v18_2.v = _mm_load1_ps(a++);
+				v18_3.v = _mm_load1_ps(a++);
+				v24.v = _mm_add_ps(v24.v, _mm_mul_ps(v2.v, v18_0.v));
+				v25.v = _mm_add_ps(v25.v, _mm_mul_ps(v2.v, v18_1.v));
+				v26.v = _mm_add_ps(v26.v, _mm_mul_ps(v2.v, v18_2.v));
+				v27.v = _mm_add_ps(v27.v, _mm_mul_ps(v2.v, v18_3.v));
+
+				//第4列乘第4行
+				v3.v = _mm_load_ps(b + 12);
+				v19_0.v = _mm_load1_ps(a++);
+				v19_1.v = _mm_load1_ps(a++);
+				v19_2.v = _mm_load1_ps(a++);
+				v19_3.v = _mm_load1_ps(a++);
+				v24.v = _mm_add_ps(v24.v, _mm_mul_ps(v3.v, v19_0.v));
+				v25.v = _mm_add_ps(v25.v, _mm_mul_ps(v3.v, v19_1.v));
+				v26.v = _mm_add_ps(v26.v, _mm_mul_ps(v3.v, v19_2.v));
+				v27.v = _mm_add_ps(v27.v, _mm_mul_ps(v3.v, v19_3.v));
+
+				b += 16;
+			}
+			v24.v = _mm_add_ps(_mm_load_ps(c), v24.v);
+			v25.v = _mm_add_ps(_mm_load_ps(c + ldc), v25.v);
+			v26.v = _mm_add_ps(_mm_load_ps(c + 2 * ldc), v26.v);
+			v27.v = _mm_add_ps(_mm_load_ps(c + 3 * ldc), v27.v);
+
+			//将__m128内的值赋给addr
+			_mm_store_ps(c, v24.v);
+			_mm_store_ps(c + ldc, v25.v);
+			_mm_store_ps(c + 2 * ldc, v26.v);
+			_mm_store_ps(c + 3 * ldc, v27.v);
+
+			c += 4;
+			a -= 4 * k;
+		}
+		sc += ldc * 4;
+		c = sc;
+		a += 4 * k;
+		b = sb;
+	}
 }
 
 /*
@@ -196,9 +362,9 @@ static void packA_4(int m, int k, float* from, int lda, float* to) {
 			a_offset2 += 4;
 			a_offset3 += 4;
 
-            b_offset += 16;
+			b_offset += 16;
 		} while (--i > 0);
-	}while(--j>0);
+	} while (--j > 0);
 }
 
 /*
@@ -287,7 +453,7 @@ static void packB_4(int k, int n, float* from, int ldb, float* to) {
 			*(b_offset0 + 14) = c_temp32;
 			*(b_offset0 + 15) = c_temp33;
 
-			b_offset += k*4;	//处理同一个4行中，其他列的数据
+			b_offset0 += k * 4;	//处理同一个4行中，其他列的数据
 		} while (--i > 0);
 	} while (--j > 0);
 }

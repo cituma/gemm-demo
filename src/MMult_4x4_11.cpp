@@ -60,7 +60,7 @@ static void InnerKernel(int m, int n, int k, float* a, int wa,
 typedef union {
 	__m128	v;		//__m128单精度浮点, __m128i整型, __m128d双精度
 	float	f[4];
-} v2f_t;
+} v4f_t;
 
 /*
 	4xk矩阵A和一个kx4矩阵B相乘, 得到4x4的结果C。
@@ -69,7 +69,7 @@ typedef union {
 */
 static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int wc)
 {
-	v2f_t
+	v4f_t
 		c_00_01_02_03_vreg, c_10_11_12_13_vreg,
 		c_20_21_22_23_vreg, c_30_31_32_33_vreg,
 		b_p0_p1_p2_p3_vreg,

@@ -54,8 +54,11 @@ extern void MMult_4x4_10(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult_4x4_11(float* A, float* B, float* C, int m, int n, int k);
 extern void MMult_4x4_12(float* A, float* B, float* C, int m, int n, int k);
 
+//GEMM
+extern void MMult_4x4_13(float* A, float* B, float* C, int m, int n, int k);
+
 int main(int argc, char* argv[]) {
-	int size = 600;
+	int size = 600; // 248; // 600;
 	size = (size / 4) * 4;
 	int m = size;
 	int n = size;
@@ -194,7 +197,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "MMult_4x4_9 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
-#if 1
+#if 0
 	// 速度
 	clear_vector(C);
 	// matrix multipl pack test
@@ -205,7 +208,7 @@ int main(int argc, char* argv[]) {
 	std::cout << "MMult_4x4_10 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
-#if 1
+#if 0
 	// 速度
 	clear_vector(C);
 	// matrix multipl pack test
@@ -225,6 +228,17 @@ int main(int argc, char* argv[]) {
 	clk.Stop();
 	cal_time = clk.GetTime() / 1000000; //s
 	std::cout << "MMult_4x4_12 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
+#endif
+
+#if 1
+	// 速度
+	clear_vector(C);
+	// matrix multipl pack test
+	clk.Start();
+	MMult_4x4_13(&A[0], &B[0], &C[0], m, n, k);
+	clk.Stop();
+	cal_time = clk.GetTime() / 1000000; //s
+	std::cout << "MMult_4x4_13 time: " << cal_time * 1000. << "ms. GFLOPS/sec: " << gflops / cal_time << std::endl;
 #endif
 
 	check_result(tmp_cmp, C);
