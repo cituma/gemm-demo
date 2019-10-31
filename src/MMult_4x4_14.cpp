@@ -8,9 +8,9 @@
 
 #define min( i, j ) ( (i)<(j) ? (i): (j) )
 
-#define GEMM_N (240)  // GEMM_R
-#define GEMM_M (240)  // GEMM_P
-#define GEMM_K (240)  // GEMM_Q
+#define GEMM_N (384)  // GEMM_R
+#define GEMM_M (1024)  // GEMM_P
+#define GEMM_K (256)  // GEMM_Q
 #define GEMM_UNROLL (4)
 #define KERNEL_4x4  kernel_4x4_v2
 
@@ -49,7 +49,7 @@ static void fastFree(void* ptr) {
 #endif
 }
 
-void MMult_4x4_13(float* A, float* B, float* C, int m, int n, int k) {
+void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
 	int lda = k;
 	int ldb = n;
 	int ldc = n;
@@ -160,7 +160,11 @@ C4 C5 C6
 C7 C8 C9
 
  */
-static void kernel_4x4_v2(int m, int n, int k,
+/*
+GEPB操作:
+mc-kc和kc-nc矩阵乘. 除了最后一块, 其它部分mc==GEMM_M, kc==GEMM_K, nc==GEMM_N
+*/
+static void kernel_4x4_v2(int mc, int nc, int kc,
 	float* sa, float * sb, float* sc, int ldc) {
 	//assert(m > 0 && n > 0 && k > 0);
 	//assert(m % 4 == 0 && n % 4 == 0 && k % 4 == 0);
@@ -176,17 +180,17 @@ static void kernel_4x4_v2(int m, int n, int k,
 		v18_0, v18_1, v18_2, v18_3,
 		v19_0, v19_1, v19_2, v19_3,
 		v24, v25, v26, v27;
-	for (int i = 0; i < m; i += 4) {
+	for (int i = 0; i < mc; i += 4) {
 		//a按每4行分panel
-		for (int j = 0; j < n; j += 4) {
+		for (int j = 0; j < nc; j += 4) {
 			//b按每4列分panel
 
 			v24.v = _mm_setzero_ps();
 			v25.v = _mm_setzero_ps();
 			v26.v = _mm_setzero_ps();
 			v27.v = _mm_setzero_ps();
-			//4xk 和 kx4 两个矩阵相乘
-			for (int l = 0; l < k; l += 4) {
+			//4xk 和 kx4 两个矩阵相乘,累加得到4x4矩阵
+			for (int l = 0; l < kc; l += 4) {
 				/*
 				A, B矩阵已按pack_A和pack_B的方式重排.
 				A(pack前):
