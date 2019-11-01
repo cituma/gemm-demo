@@ -49,6 +49,22 @@ static void fastFree(void* ptr) {
 #endif
 }
 
+/*
+对于行主序, 理想的GEPB(A,B,C)条件
+    前 3 个前提不考虑 TLB，假设只有 内存、cache 和 ALU ：
+	1) kc * nc 要小，小到 " (A的min_mm行) + (B的block) + (C的min_mm行) "能够一起塞进 L1 cache
+	2) 如果 1 被满足，CPU 计算时不再受内存速度的限制，即得到的gflops值就是真实的计算能力
+	3) B 的block只会被加载进 Cache 一次，gemm过程中不会被换入又换出
+    后 2 个要考虑 TLB，因为 TLB miss 会 stall CPU：
+	4) kc 和 nc 要小，小到 "(A的min_mm行) + (B的block) + (C的min_mm行) " 能够被 TLB 索引.
+    5) B的block只被加载到 TLB 一次. gemm过程不会换入换出.
+
+所以有以下参数限制:
+	1) kc ~= nc //用一半的
+    2) min_mm >= (Rcomp/(2*Rload)) 其中 Rcomp 是算力、Rload 是 L2 cache 到 register 的带宽. 也就是说将B从L2cache中取出的时间不超过前一个元素计算时间。
+    3) kc * nc <= K
+    4) kc * nc 只能占cache一半.
+*/
 void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
 	int lda = k;
 	int ldb = n;
@@ -67,6 +83,7 @@ void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
 		}
 
 		int min_k = 1;
+        //论文Fig.4中, GEMM_VAR1操作
 		for (int ks = 0; ks < k; ks += min_k) {
 			min_k = k - ks;
 			//min_k 在4到GEMM_K之间, 除了最后一个循环，其他值都为GEMM_K
@@ -80,7 +97,6 @@ void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
 
 			//首先 packB
 			int min_n = n;
-			//min_n 在4到GEMM_N之间
 			if (n >= GEMM_N * 2) {
 				min_n = GEMM_N;
 			}
@@ -91,6 +107,10 @@ void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
 
 			// micro kernel, split A Block to smaller Panel
 			int min_mm = 0;
+            //A中. 高宽为 min_m*min_k 的 panel 中, 分为高宽为 min_mm*min_k 的小块.
+            //这些小块分别乘以B中高宽为 min_k*min_n 的block(这是GEMM的最小操作).
+            //矩阵乘并拼接后, 得到C中min_m * min_n 的panel.
+            //论文Fig.4中, GEPP_VAR2分解后, GEPB操作.
 			for (int mms = ms; mms < ms + min_m; mms += min_mm) {
 				min_mm = (ms + min_m) - mms;
 				if (min_mm >= 3 * GEMM_UNROLL) {
@@ -107,11 +127,11 @@ void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
 				float* sa_addr = sa + min_k * (mms - ms);
 				packA_4(min_mm, min_k, A + mms * lda + ks, lda, sa_addr);
 
-				//min_mm * min_k 与 min_k * min_n 矩阵乘, 得到min_mm * min_n的矩阵
+                //Fig.4 GEPB操作的最小操作单元
 				KERNEL_4x4(min_mm, min_n, min_k, sa_addr, sb, C + mms * ldc, ldc);
 			}
 
-
+            //论文Fig.4中, GEPP_VAR2后的其它block.
 			// the first B Block has been packed, proc the others
 			for (int ns = min_n; ns < n; ns += min_n) {
 				min_n = n - ns;
@@ -122,7 +142,7 @@ void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
 					min_n = (min_n / 2 + GEMM_UNROLL - 1) & ~(GEMM_UNROLL - 1);
 				}
 
-				packB_4(min_k, min_n, B + ns + ldb * ks, ldb, sb);
+				packB_4(min_k, min_n, B + ns + ks * ldb, ldb, sb);
 				KERNEL_4x4(min_m, min_n, min_k, sa, sb, C + ms * ldc + ns, ldc);
 			}
 		}
@@ -180,9 +200,12 @@ static void kernel_4x4_v2(int mc, int nc, int kc,
 		v18_0, v18_1, v18_2, v18_3,
 		v19_0, v19_1, v19_2, v19_3,
 		v24, v25, v26, v27;
+    //b应该放在L2cache中. 可以通过限制kc*nc大小,
 	for (int i = 0; i < mc; i += 4) {
 		//a按每4行分panel
 		for (int j = 0; j < nc; j += 4) {
+            //在此循环中的a会重复使用，应该放在L1cache中. 可以通过限制kc大小, 使a大小(4*kc)为L1 cache的一半.
+
 			//b按每4列分panel
 
 			v24.v = _mm_setzero_ps();
@@ -190,6 +213,7 @@ static void kernel_4x4_v2(int mc, int nc, int kc,
 			v26.v = _mm_setzero_ps();
 			v27.v = _mm_setzero_ps();
 			//4xk 和 kx4 两个矩阵相乘,累加得到4x4矩阵
+            //v24-v27总共16个float, 应该存放在寄存器中
 			for (int l = 0; l < kc; l += 4) {
 				/*
 				A, B矩阵已按pack_A和pack_B的方式重排.
@@ -210,7 +234,7 @@ static void kernel_4x4_v2(int mc, int nc, int kc,
 				8 9 a b
 				...
 
-				用A的l列乘B的l行, (l+1)列乘(l+1)行,(l+2)列乘(l+2)行,(l+3)列乘(l+3)行 
+				用A的l列乘B的l行, (l+1)列乘(l+1)行,(l+2)列乘(l+2)行,(l+3)列乘(l+3)行
 				得到4个4x4矩阵并累加.
 				最后把k/4个4x4矩阵累加.
 				*/
@@ -274,11 +298,11 @@ static void kernel_4x4_v2(int mc, int nc, int kc,
 			_mm_store_ps(c + 3 * ldc, v27.v);
 
 			c += 4;
-			a -= 4 * k;
+			a -= 4 * kc;
 		}
 		sc += ldc * 4;
 		c = sc;
-		a += 4 * k;
+		a += 4 * kc;
 		b = sb;
 	}
 }
