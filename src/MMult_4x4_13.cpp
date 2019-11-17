@@ -1,6 +1,7 @@
 #include <iostream>
 #include <vector>
 #include <stdlib.h>
+#include <assert.h>
 
 #define A(i,j) a[ (i)*wa + (j) ]
 #define B(i,j) b[ (i)*wb + (j) ]
@@ -37,7 +38,7 @@ static float* fastMalloc(int size) {
 	void* ptr = 0;
 	int iRet = posix_memalign(&ptr, 64, size * sizeof(float));
 	assert(0 == iRet);
-	return ptr;
+	return static_cast<float*>(ptr);
 #endif
 }
 
