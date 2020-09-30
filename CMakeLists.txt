@@ -1,42 +1,38 @@
 cmake_minimum_required(VERSION 3.5)
 project(GemmDemo LANGUAGES C CXX)
 
-set(OS          "linux" CACHE STRING "Target OS: linux, anroid")
+set(CMAKE_CXX_STANDARD 11)
+set(CMAKE_CXX_STANDARD_REQUIRED 11)
 
-#set(CMAKE_BUILD_TYPE "Debug")
-if(NOT CMAKE_BUILD_TYPE OR CMAKE_BUILD_TYPE STREQUAL "Release")
-    message("cmake compiler in release mode")
-    set(CMAKE_BUILD_TYPE "Release" CACHE STRING "Choose the type of build." FORCE)
-    set(CMAKE_CXX_FLAGS_RELEASE "${CMAKE_CXX_FLAGS_RELEASE} -O3")
-else()
-    message("cmake compiler in debug mode")
-    set(CMAKE_CXX_FLAGS "-g -O0")
+if(NOT CMAKE_BUILD_TYPE)
+    set(CMAKE_BUILD_TYPE release CACHE STRING "Choose the type of build" FORCE)
 endif()
+
+# cmake tools 
+include(${PROJECT_SOURCE_DIR}/cmake/utils.cmake)
+
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -pthread")
 
-####################################
-## to use C++11
-set (CMAKE_CXX_STANDARD 11)
-set (CMAKE_CXX_STANDARD_REQUIRED ON)
-if (${CMAKE_CXX_COMPILER_ID} STREQUAL GNU)
-    set (CMAKE_CXX_FLAGS "-std=c++11 ${CMAKE_CXX_FLAGS}")
-endif()
-####################################
-
-# add OpenCV
-find_package(OpenCV REQUIRED)
-include_directories(${OpenCV_INCLUDE_DIRS})
+## add OpenCV
+#find_package(OpenCV REQUIRED)
+#include_directories(${OpenCV_INCLUDE_DIRS})
 
 file(GLOB srcs "src/*.cpp")
-ADD_EXECUTABLE(
+add_executable(
     gemm_demo
     ${srcs}
     )
 
-TARGET_LINK_LIBRARIES(
+target_link_libraries(
     gemm_demo
     ${OpenCV_LIBRARIES}
     )
+if(ANDROID)
+    target_link_libraries(
+        gemm_demo
+        PUBLIC log
+    )
+endif()
 
 # print
 function(string_status text value)
@@ -54,8 +50,8 @@ endfunction()
 message("===============================================================================")
 string_status("C compiler"                     ${CMAKE_C_COMPILER})
 string_status("C++ compiler"                   ${CMAKE_CXX_COMPILER})
-string_status("opencv libs"                    ${OpenCV_LIBRARIES})
-string_status("opencv include"                 ${OpenCV_INCLUDE_DIRS})
+#string_status("opencv libs"                    ${OpenCV_LIBRARIES})
+#string_status("opencv include"                 ${OpenCV_INCLUDE_DIRS})
 message("===============================================================================")
 
 

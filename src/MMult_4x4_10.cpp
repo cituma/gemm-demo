@@ -1,5 +1,7 @@
 #include <iostream>
 
+#ifndef __ANDROID__
+
 #define A(i,j) a[ (i)*wa + (j) ]
 #define B(i,j) b[ (i)*wb + (j) ]
 #define C(i,j) c[ (i)*wc + (j) ]
@@ -67,3 +69,10 @@ static void AddDot4x4(int k, float *a, int wa, float *b, int wb, float *c, int w
 	C(2, 0) += c_20_21_22_23_vreg.f[0];   C(2, 1) += c_20_21_22_23_vreg.f[1];   C(2, 2) += c_20_21_22_23_vreg.f[2];   C(2, 3) += c_20_21_22_23_vreg.f[3];
 	C(3, 0) += c_30_31_32_33_vreg.f[0];   C(3, 1) += c_30_31_32_33_vreg.f[1];   C(3, 2) += c_30_31_32_33_vreg.f[2];   C(3, 3) += c_30_31_32_33_vreg.f[3];
 }
+
+#else  //__ANDROID__
+
+void MMult_4x4_10(float* A, float* B, float* C, int m, int n, int k) {
+}
+
+#endif  //__ANDROID__

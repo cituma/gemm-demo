@@ -3,6 +3,8 @@
 #include <stdlib.h>
 #include <assert.h>
 
+#ifndef __ANDROID__
+
 #define A(i,j) a[ (i)*wa + (j) ]
 #define B(i,j) b[ (i)*wb + (j) ]
 #define C(i,j) c[ (i)*wc + (j) ]
@@ -486,3 +488,10 @@ static void packB_4(int k, int n, float* from, int ldb, float* to) {
 		} while (--i > 0);
 	} while (--j > 0);
 }
+
+#else  //__ANDROID__
+
+void MMult_4x4_14(float* A, float* B, float* C, int m, int n, int k) {
+}
+
+#endif  //__ANDROID__
